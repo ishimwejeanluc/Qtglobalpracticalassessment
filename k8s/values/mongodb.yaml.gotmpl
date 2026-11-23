@@ -1,0 +1,3 @@
+# The worker that holds the local PersistentVolume (first worker of the Ansible inventory)
+persistence:
+  nodeName: {{ env "MONGO_STORAGE_NODE" | default "c3-k8s-worker-1" }}

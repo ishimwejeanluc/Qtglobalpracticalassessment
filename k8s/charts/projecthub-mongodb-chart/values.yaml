@@ -1,0 +1,41 @@
+component: mongodb
+fullnameOverride: ""
+
+image:
+  repository: mongo
+  tag: ""                        # defaults to the chart's appVersion (7.0.48)
+  pullPolicy: IfNotPresent
+
+securityContext:
+  uid: 999                       # mongodb user of the official image
+
+# Secret created outside Helm: MONGO_ROOT_USER, MONGO_ROOT_PASSWORD
+existingSecret: projecthub-secrets
+
+wiredTigerCacheSizeGB: 0.25      # keep the storage-engine cache inside the memory limit
+resources:
+  requests: { cpu: 250m, memory: 512Mi }
+  limits: { cpu: "1", memory: 1Gi }
+
+probes:
+  startup: { tcpSocket: { port: mongodb }, periodSeconds: 5, failureThreshold: 30 }
+  readiness: { tcpSocket: { port: mongodb }, periodSeconds: 10, failureThreshold: 3 }
+  liveness: { tcpSocket: { port: mongodb }, periodSeconds: 20, failureThreshold: 3 }
+
+# No dynamic provisioner in this cluster: a static local PV on one worker.
+# The directory must exist, owned by uid 999 (created by ansible/playbooks/k8s-app-prereqs.yml).
+# PV and PVC are kept on "helm uninstall" and the PV is Retain: data is never deleted by accident.
+persistence:
+  storageClassName: projecthub-local
+  size: 5Gi
+  nodeName: c3-k8s-worker-1
+  path: /var/lib/projecthub/mongodb
+
+service:
+  port: 27017
+
+networkPolicy:
+  enabled: true
+  port: 27017
+  from:
+    - component: api             # only the API talks to the database

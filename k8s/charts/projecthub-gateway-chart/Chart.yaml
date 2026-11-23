@@ -1,0 +1,12 @@
+apiVersion: v2
+name: projecthub-gateway-chart
+description: "ProjectHub - Gateway API entry point (GatewayClass, EnvoyProxy, Gateway, HTTPRoute) for Envoy Gateway"
+type: application
+# Chart version: bump on every template change (PATCH fix, MINOR feature, MAJOR breaking)
+version: 1.0.0
+# Default image tag
+appVersion: "1.6.1"
+dependencies:
+  - name: projecthub-lib
+    version: 1.0.0
+    repository: file://../projecthub-lib

@@ -1,0 +1,10 @@
+# Local volumes, no provisioner: pods bind when scheduled onto the volume's node
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: {{ .Values.persistence.storageClassName }}
+  labels:
+    {{- include "projecthub-lib.labels" . | nindent 4 }}
+provisioner: kubernetes.io/no-provisioner
+volumeBindingMode: WaitForFirstConsumer
+reclaimPolicy: Retain

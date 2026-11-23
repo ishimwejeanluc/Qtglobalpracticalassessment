@@ -1,0 +1,18 @@
+# External entry point: http://<node-ip>:{{ .Values.service.nodePort }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "projecthub-lib.fullname" . }}
+  labels:
+    {{- include "projecthub-lib.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.service.type }}
+  selector:
+    {{- include "projecthub-lib.selectorLabels" . | nindent 4 }}
+  ports:
+    - name: http
+      port: {{ .Values.service.port }}
+      targetPort: http
+      {{- if eq .Values.service.type "NodePort" }}
+      nodePort: {{ .Values.service.nodePort }}
+      {{- end }}

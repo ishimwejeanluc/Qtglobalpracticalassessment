@@ -1,0 +1,12 @@
+apiVersion: v2
+name: projecthub-edge-chart
+description: "ProjectHub - NGINX reverse proxy and NodePort entry point (/ -> frontend, /api/ -> api)"
+type: application
+# Chart version: bump on every template change (PATCH fix, MINOR feature, MAJOR breaking)
+version: 1.0.0
+# Default image tag
+appVersion: "1.30.6-alpine"
+dependencies:
+  - name: projecthub-lib
+    version: 1.0.0
+    repository: file://../projecthub-lib

@@ -1,0 +1,49 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "projecthub-lib.fullname" . }}
+  labels:
+    {{- include "projecthub-lib.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  revisionHistoryLimit: 5
+  {{- include "projecthub-lib.rollingUpdate" . | nindent 2 }}
+  selector:
+    matchLabels:
+      {{- include "projecthub-lib.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "projecthub-lib.labels" . | nindent 8 }}
+      annotations:
+        # Restart the pods when the NGINX configuration changes
+        checksum/nginx: {{ include "projecthub-edge.nginxConf" . | sha256sum }}
+    spec:
+      {{- include "projecthub-lib.podIdentity" . | nindent 6 }}
+      securityContext:
+        {{- include "projecthub-lib.podSecurityContext" . | nindent 8 }}
+      {{- include "projecthub-lib.topologySpread" . | nindent 6 }}
+      containers:
+        - name: nginx
+          image: {{ include "projecthub-lib.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8080
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          securityContext:
+            {{- include "projecthub-lib.containerSecurityContext" . | nindent 12 }}
+          {{- include "projecthub-lib.probes" . | nindent 10 }}
+          volumeMounts:
+            - name: config
+              mountPath: /etc/nginx/conf.d
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "projecthub-lib.fullname" . }}-nginx
+        - name: tmp
+          emptyDir: {}

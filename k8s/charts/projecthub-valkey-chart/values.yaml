@@ -1,0 +1,35 @@
+component: valkey
+fullnameOverride: ""
+
+image:
+  repository: valkey/valkey
+  tag: ""                        # defaults to the chart's appVersion (8.1.12-alpine)
+  pullPolicy: IfNotPresent
+
+securityContext:
+  uid: 999                       # valkey user of the official image
+  gid: 1000
+
+# Secret created outside Helm: VALKEY_PASSWORD
+existingSecret: projecthub-secrets
+
+# Cache only: no persistence on purpose. The API falls back to MongoDB when the cache is
+# empty or down, so losing it costs latency, never data.
+maxMemory: 128mb
+resources:
+  requests: { cpu: 50m, memory: 64Mi }
+  limits: { cpu: 250m, memory: 192Mi }
+
+probes:
+  readiness: { exec: { command: [sh, -c, "valkey-cli ping | grep -q PONG"] }, periodSeconds: 10, failureThreshold: 3 }
+  liveness: { tcpSocket: { port: valkey }, periodSeconds: 20, failureThreshold: 3 }
+
+service:
+  port: 6379
+  portName: valkey
+
+networkPolicy:
+  enabled: true
+  port: 6379
+  from:
+    - component: api

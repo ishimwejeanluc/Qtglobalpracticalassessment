@@ -1,0 +1,32 @@
+component: gateway
+fullnameOverride: ""
+
+# Requires the Gateway API CRDs and Envoy Gateway (installed by ansible/playbooks/k8s-cluster.yml)
+gatewayClass:
+  create: true                   # cluster-scoped; set false if the class already exists
+  name: projecthub-envoy
+  controllerName: gateway.envoyproxy.io/gatewayclass-controller
+
+listener:
+  port: 80
+
+# Envoy proxy pods (they run in envoy-gateway-system) and their NodePort Service
+proxy:
+  replicas: 2
+  nodePort: 30081                # http://<any-node-ip>:30081
+  # Cluster: every node answers (Envoy Gateway's default "Local" only answers on nodes running a proxy)
+  externalTrafficPolicy: Cluster
+  resources:
+    requests: { cpu: 50m, memory: 64Mi }
+    limits: { cpu: 500m, memory: 256Mi }
+
+# HTTPRoute: same routing as the NGINX edge and Docker Compose
+routes:
+  api:
+    pathPrefix: /api
+    service: projecthub-api
+    port: 8080
+  frontend:
+    pathPrefix: /
+    service: projecthub-frontend
+    port: 8080

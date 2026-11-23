@@ -1,0 +1,40 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "projecthub-lib.fullname" . }}
+  labels:
+    {{- include "projecthub-lib.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  revisionHistoryLimit: 5
+  {{- include "projecthub-lib.rollingUpdate" . | nindent 2 }}
+  selector:
+    matchLabels:
+      {{- include "projecthub-lib.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "projecthub-lib.labels" . | nindent 8 }}
+    spec:
+      {{- include "projecthub-lib.podIdentity" . | nindent 6 }}
+      securityContext:
+        {{- include "projecthub-lib.podSecurityContext" . | nindent 8 }}
+      {{- include "projecthub-lib.topologySpread" . | nindent 6 }}
+      containers:
+        - name: frontend
+          image: {{ include "projecthub-lib.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8080
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          securityContext:
+            {{- include "projecthub-lib.containerSecurityContext" . | nindent 12 }}
+          {{- include "projecthub-lib.probes" . | nindent 10 }}
+          volumeMounts:
+            - name: tmp                  # nginx pid and temp files (root filesystem is read-only)
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}

@@ -1,0 +1,15 @@
+# Headless Service: stable DNS for the StatefulSet pod; cluster-internal only
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "projecthub-lib.fullname" . }}
+  labels:
+    {{- include "projecthub-lib.labels" . | nindent 4 }}
+spec:
+  clusterIP: None
+  selector:
+    {{- include "projecthub-lib.selectorLabels" . | nindent 4 }}
+  ports:
+    - name: mongodb
+      port: {{ .Values.service.port }}
+      targetPort: mongodb

@@ -1,0 +1,54 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "projecthub-lib.fullname" . }}
+  labels:
+    {{- include "projecthub-lib.labels" . | nindent 4 }}
+spec:
+  serviceName: {{ include "projecthub-lib.fullname" . }}
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "projecthub-lib.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "projecthub-lib.labels" . | nindent 8 }}
+    spec:
+      {{- include "projecthub-lib.podIdentity" . | nindent 6 }}
+      securityContext:
+        {{- include "projecthub-lib.podSecurityContext" . | nindent 8 }}
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: mongodb
+          image: {{ include "projecthub-lib.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args: ["--wiredTigerCacheSizeGB", {{ .Values.wiredTigerCacheSizeGB | quote }}]
+          ports:
+            - name: mongodb
+              containerPort: 27017
+          env:
+            - name: MONGO_INITDB_ROOT_USERNAME
+              valueFrom: { secretKeyRef: { name: {{ .Values.existingSecret }}, key: MONGO_ROOT_USER } }
+            - name: MONGO_INITDB_ROOT_PASSWORD
+              valueFrom: { secretKeyRef: { name: {{ .Values.existingSecret }}, key: MONGO_ROOT_PASSWORD } }
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          securityContext:
+            {{- include "projecthub-lib.containerSecurityContext" . | nindent 12 }}
+          {{- include "projecthub-lib.probes" . | nindent 10 }}
+          volumeMounts:
+            - name: data
+              mountPath: /data/db
+            - name: configdb             # declared as a volume by the image
+              mountPath: /data/configdb
+            - name: tmp                  # entrypoint init files and the mongod socket
+              mountPath: /tmp
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ include "projecthub-lib.fullname" . }}-data
+        - name: configdb
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}

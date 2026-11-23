@@ -1,0 +1,24 @@
+{{- $p := .Values.persistence }}
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: {{ include "projecthub-lib.fullname" . }}-pv
+  labels:
+    {{- include "projecthub-lib.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/resource-policy: keep
+spec:
+  capacity:
+    storage: {{ $p.size }}
+  accessModes: [ReadWriteOnce]
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: {{ $p.storageClassName }}
+  local:
+    path: {{ $p.path }}
+  nodeAffinity:                  # the data lives on this node, so MongoDB is scheduled there
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: kubernetes.io/hostname
+              operator: In
+              values: [{{ $p.nodeName }}]

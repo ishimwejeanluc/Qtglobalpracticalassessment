@@ -1,0 +1,76 @@
+# ProjectHub on Kubernetes: one Helm release per service, charts pulled from Docker Hub (OCI).
+# Deployed by hand, after ansible/playbooks/k8s-app-prereqs.yml (storage dir, namespace, Secret):
+#
+#   cd k8s
+#   export KUBECONFIG=../ansible/kubeconfig
+#   helmfile diff                     # preview
+#   helmfile apply                    # deploy only what changed (needs the helm-diff plugin)
+#
+# Optional overrides (defaults = current release, keep in step with docker/.env):
+#   DOCKERHUB_USER      Docker Hub namespace for app images AND charts   (ishimwejeanluc)
+#   IMAGE_TAG           immutable application image tag                  (1.0.0)
+#   MONGO_STORAGE_NODE  worker holding the MongoDB local PersistentVolume (c3-k8s-worker-1)
+
+repositories:
+  - name: dockerhub
+    url: registry-1.docker.io/{{ env "DOCKERHUB_USER" | default "ishimwejeanluc" }}
+    oci: true
+
+helmDefaults:
+  wait: true
+  timeout: 600
+  atomic: true          # roll a release back automatically if its upgrade fails
+  cleanupOnFail: true
+  createNamespace: false   # k8s/namespace.yaml (PSA labels + default-deny) is applied first
+
+commonLabels:
+  app.kubernetes.io/part-of: projecthub
+
+releases:
+  # ---------- Data tier ----------
+  - name: projecthub-mongodb
+    namespace: qt-spring-app
+    chart: dockerhub/projecthub-mongodb-chart
+    version: 1.0.0
+    values:
+      - values/mongodb.yaml.gotmpl
+
+  - name: projecthub-valkey
+    namespace: qt-spring-app
+    chart: dockerhub/projecthub-valkey-chart
+    version: 1.0.0
+
+  # ---------- Application ----------
+  - name: projecthub-api
+    namespace: qt-spring-app
+    chart: dockerhub/projecthub-api-chart
+    version: 1.0.0
+    values:
+      - values/api.yaml.gotmpl
+    needs:
+      - qt-spring-app/projecthub-mongodb
+      - qt-spring-app/projecthub-valkey
+
+  - name: projecthub-frontend
+    namespace: qt-spring-app
+    chart: dockerhub/projecthub-frontend-chart
+    version: 1.0.0
+    values:
+      - values/frontend.yaml.gotmpl
+
+  # ---------- Entry points ----------
+  - name: projecthub-edge
+    namespace: qt-spring-app
+    chart: dockerhub/projecthub-edge-chart
+    version: 1.0.0
+    needs:
+      - qt-spring-app/projecthub-api
+      - qt-spring-app/projecthub-frontend
+
+  - name: projecthub-gateway
+    namespace: qt-spring-app
+    chart: dockerhub/projecthub-gateway-chart
+    version: 1.0.0
+    needs:
+      - qt-spring-app/projecthub-api
+      - qt-spring-app/projecthub-frontend

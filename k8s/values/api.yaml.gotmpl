@@ -1,0 +1,4 @@
+# Image built and pushed by scripts/build-push-images.sh (immutable tag from docker/.env)
+image:
+  repository: {{ env "DOCKERHUB_USER" | default "ishimwejeanluc" }}/projecthub-api
+  tag: {{ env "IMAGE_TAG" | default "1.0.0" | quote }}

@@ -1,0 +1,11 @@
+{{- if .Values.gatewayClass.create }}
+# Cluster-wide: which controller implements Gateways of this class
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  name: {{ .Values.gatewayClass.name }}
+  labels:
+    {{- include "projecthub-lib.labels" . | nindent 4 }}
+spec:
+  controllerName: {{ .Values.gatewayClass.controllerName }}
+{{- end }}

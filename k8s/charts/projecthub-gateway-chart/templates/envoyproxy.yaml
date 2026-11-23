@@ -1,0 +1,27 @@
+{{- $p := .Values.proxy }}
+# Envoy Gateway settings for this Gateway's proxies: replicas, resources, NodePort Service
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: EnvoyProxy
+metadata:
+  name: {{ include "projecthub-lib.fullname" . }}-proxy
+  labels:
+    {{- include "projecthub-lib.labels" . | nindent 4 }}
+spec:
+  provider:
+    type: Kubernetes
+    kubernetes:
+      envoyDeployment:
+        replicas: {{ $p.replicas }}
+        container:
+          resources:
+            {{- toYaml $p.resources | nindent 12 }}
+      envoyService:
+        type: NodePort
+        externalTrafficPolicy: {{ $p.externalTrafficPolicy }}
+        patch:
+          type: StrategicMerge
+          value:
+            spec:
+              ports:
+                - port: {{ .Values.listener.port }}
+                  nodePort: {{ $p.nodePort }}

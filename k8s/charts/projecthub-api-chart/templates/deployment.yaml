@@ -1,0 +1,56 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "projecthub-lib.fullname" . }}
+  labels:
+    {{- include "projecthub-lib.labels" . | nindent 4 }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  revisionHistoryLimit: 5
+  {{- include "projecthub-lib.rollingUpdate" . | nindent 2 }}
+  selector:
+    matchLabels:
+      {{- include "projecthub-lib.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "projecthub-lib.labels" . | nindent 8 }}
+      annotations:
+        # Restart the pods when the configuration changes
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+    spec:
+      {{- include "projecthub-lib.podIdentity" . | nindent 6 }}
+      securityContext:
+        {{- include "projecthub-lib.podSecurityContext" . | nindent 8 }}
+      {{- include "projecthub-lib.topologySpread" . | nindent 6 }}
+      containers:
+        - name: api
+          image: {{ include "projecthub-lib.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: {{ include "projecthub-lib.fullname" . }}-config
+          env:
+            - name: MONGO_USER
+              valueFrom: { secretKeyRef: { name: {{ .Values.existingSecret }}, key: MONGO_ROOT_USER } }
+            - name: MONGO_PASSWORD
+              valueFrom: { secretKeyRef: { name: {{ .Values.existingSecret }}, key: MONGO_ROOT_PASSWORD } }
+            # ConfigMap address + Secret credentials ($(VAR) expansion)
+            - name: MONGO_URI
+              value: "mongodb://$(MONGO_USER):$(MONGO_PASSWORD)@$(MONGO_HOST)/?authSource=admin"
+            - name: JWT_SECRET
+              valueFrom: { secretKeyRef: { name: {{ .Values.existingSecret }}, key: JWT_SECRET } }
+            - name: VALKEY_PASSWORD
+              valueFrom: { secretKeyRef: { name: {{ .Values.existingSecret }}, key: VALKEY_PASSWORD } }
+            - name: GOMEMLIMIT
+              value: {{ .Values.goMemLimit | quote }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          securityContext:
+            {{- include "projecthub-lib.containerSecurityContext" . | nindent 12 }}
+          {{- include "projecthub-lib.probes" . | nindent 10 }}

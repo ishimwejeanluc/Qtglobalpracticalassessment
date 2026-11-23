@@ -1,0 +1,26 @@
+# Namespace-level resources, applied before the Helm releases (Helm stores release records
+# inside the namespace, so it must exist first).
+
+# Pod Security Admission "restricted": the strictest built-in policy, enforced for every pod.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: qt-spring-app
+  labels:
+    app.kubernetes.io/part-of: projecthub
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: latest
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted
+---
+# Deny all ingress by default; each service chart opens only the paths it needs (Calico enforces it).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  namespace: qt-spring-app
+  labels:
+    app.kubernetes.io/part-of: projecthub
+spec:
+  podSelector: {}
+  policyTypes: [Ingress]

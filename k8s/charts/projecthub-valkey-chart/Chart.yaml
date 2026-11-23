@@ -1,0 +1,12 @@
+apiVersion: v2
+name: projecthub-valkey-chart
+description: "ProjectHub - Valkey cache (Redis-compatible), password protected, no persistence"
+type: application
+# Chart version: bump on every template change (PATCH fix, MINOR feature, MAJOR breaking)
+version: 1.0.0
+# Default image tag
+appVersion: "8.1.12-alpine"
+dependencies:
+  - name: projecthub-lib
+    version: 1.0.0
+    repository: file://../projecthub-lib

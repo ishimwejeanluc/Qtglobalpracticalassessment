@@ -1,0 +1,55 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "projecthub-lib.fullname" . }}
+  labels:
+    {{- include "projecthub-lib.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels:
+      {{- include "projecthub-lib.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "projecthub-lib.labels" . | nindent 8 }}
+    spec:
+      {{- include "projecthub-lib.podIdentity" . | nindent 6 }}
+      securityContext:
+        {{- include "projecthub-lib.podSecurityContext" . | nindent 8 }}
+      containers:
+        - name: valkey
+          image: {{ include "projecthub-lib.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            - valkey-server
+            - --requirepass
+            - $(VALKEY_PASSWORD)
+            - --maxmemory
+            - {{ .Values.maxMemory | quote }}
+            - --maxmemory-policy
+            - allkeys-lru
+            - --save
+            - ""
+            - --appendonly
+            - "no"
+          ports:
+            - name: valkey
+              containerPort: 6379
+          env:
+            - name: VALKEY_PASSWORD
+              valueFrom: { secretKeyRef: { name: {{ .Values.existingSecret }}, key: VALKEY_PASSWORD } }
+            - name: REDISCLI_AUTH        # lets valkey-cli (readiness probe) authenticate
+              valueFrom: { secretKeyRef: { name: {{ .Values.existingSecret }}, key: VALKEY_PASSWORD } }
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          securityContext:
+            {{- include "projecthub-lib.containerSecurityContext" . | nindent 12 }}
+          {{- include "projecthub-lib.probes" . | nindent 10 }}
+          volumeMounts:
+            - name: data
+              mountPath: /data
+      volumes:
+        - name: data
+          emptyDir: {}

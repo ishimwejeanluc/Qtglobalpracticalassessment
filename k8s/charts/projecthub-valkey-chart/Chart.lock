@@ -1,0 +1,6 @@
+dependencies:
+- name: projecthub-lib
+  repository: file://../projecthub-lib
+  version: 1.0.0
+digest: sha256:ad2e0707cbc60083e6ef32fd316b2ea165aa671d2c9c0e6d9a87ef482b8f3cdc
+generated: "2026-11-23T12:55:38.060587+02:00"

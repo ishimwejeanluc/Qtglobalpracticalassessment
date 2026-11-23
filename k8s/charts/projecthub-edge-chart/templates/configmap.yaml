@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "projecthub-lib.fullname" . }}-nginx
+  labels:
+    {{- include "projecthub-lib.labels" . | nindent 4 }}
+data:
+  default.conf: |
+    {{- include "projecthub-edge.nginxConf" . | nindent 4 }}

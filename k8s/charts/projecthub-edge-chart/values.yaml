@@ -1,0 +1,41 @@
+component: edge
+fullnameOverride: ""
+
+image:
+  repository: nginxinc/nginx-unprivileged
+  tag: ""                        # defaults to the chart's appVersion (1.30.6-alpine)
+  pullPolicy: IfNotPresent
+
+replicaCount: 2
+securityContext:
+  uid: 101
+
+# Services the edge routes to (Services of the other releases, same namespace)
+upstreams:
+  frontend: projecthub-frontend:8080
+  api: projecthub-api:8080
+
+resources:
+  requests: { cpu: 25m, memory: 32Mi }
+  limits: { cpu: 200m, memory: 128Mi }
+
+probes:
+  readiness: { httpGet: { path: /nginx-health, port: http }, periodSeconds: 10, failureThreshold: 3 }
+  liveness: { httpGet: { path: /nginx-health, port: http }, periodSeconds: 20, failureThreshold: 3 }
+
+# The application's external entry point: http://<any-node-ip>:<nodePort>
+service:
+  type: NodePort
+  port: 80
+  nodePort: 30080
+
+pdb:
+  enabled: true
+  minAvailable: 1
+
+topologySpread: true
+
+networkPolicy:
+  enabled: true
+  port: 8080
+  from: []                       # any source: this is the public entry point

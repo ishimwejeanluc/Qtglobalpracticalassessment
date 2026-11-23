@@ -1,0 +1,23 @@
+{{- $c := .Values.config }}
+# Non-secret API configuration; credentials come from the existing Secret
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "projecthub-lib.fullname" . }}-config
+  labels:
+    {{- include "projecthub-lib.labels" . | nindent 4 }}
+data:
+  PORT: "8080"
+  GIN_MODE: {{ $c.ginMode | quote }}
+  CORS_ORIGINS: {{ $c.corsOrigins | quote }}
+  JWT_EXPIRES_IN: {{ $c.jwtExpiresIn | quote }}
+  SEED_ENABLED: {{ $c.seedEnabled | quote }}
+  # Datasource: address + database; the Deployment builds MONGO_URI with the Secret's credentials
+  MONGO_HOST: {{ printf "%s:%v" $c.mongodb.host $c.mongodb.port | quote }}
+  MONGO_DB: {{ $c.mongodb.database | quote }}
+  MONGO_CONNECT_TIMEOUT: {{ $c.mongodb.connectTimeout | quote }}
+  CACHE_ENABLED: {{ $c.cache.enabled | quote }}
+  VALKEY_ADDR: {{ printf "%s:%v" $c.cache.host $c.cache.port | quote }}
+  VALKEY_DB: "0"
+  CACHE_STATS_TTL: {{ $c.cache.statsTTL | quote }}
+  CACHE_USER_TTL: {{ $c.cache.userTTL | quote }}
