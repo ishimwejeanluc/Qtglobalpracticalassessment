@@ -1,0 +1,28 @@
+# Terraform
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+crash.log
+
+# Secrets
+.env
+.env.*
+!*.example
+**/secrets.yaml
+*.pem
+*_ed25519
+kubeconfig
+
+# OS / tooling
+.DS_Store
+node_modules/
+dist/
+
+# Additional file
+k8sreq.md
+prompt.md
+# Packaged Helm charts and vendored library
+k8s/dist/
+k8s/charts/*/charts/
