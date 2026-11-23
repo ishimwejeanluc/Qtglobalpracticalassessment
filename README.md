@@ -25,6 +25,7 @@ Everything is code, idempotent (safe to re-run), and uses pinned, immutable vers
 10. [**Runbook: build everything from zero, step by step**](#10-runbook)
 11. [Security](#11-security)
 12. [Troubleshooting: problems we hit and how they were fixed](#12-troubleshooting)
+13. [Submission checklist](#13-submission-checklist)
 
 ---
 
@@ -302,7 +303,7 @@ Full details: [k8s/README.md](k8s/README.md).
 
 **Why separate releases instead of one big chart?** Each service is deployed and rolled back on its own. Rolling back a frontend bug never touches the database.
 
-**Why the charts look the way they do:** every chart was checked against a senior platform-engineer checklist with 24 items in three pillars: Reliability, Security, and Workflow & Governance. [k8s/README.md, "Production-readiness checklist"](k8s/README.md#production-readiness-checklist-what-we-did-and-why) explains each item: what we did, why it matters, and what is left for production.
+**Why the charts look the way they do:** every chart was checked against a production-readiness checklist with 24 items in three pillars: Reliability, Security, and Workflow & Governance. [k8s/README.md, "Production-readiness checklist"](k8s/README.md#production-readiness-checklist-what-we-did-and-why) explains each item: what we did, why it matters, and what is left for production.
 
 The short version:
 - **Probes, PDBs and spread:** every pod has requests, limits and probes. The API, frontend and edge have 2–3 replicas with PDBs, `maxUnavailable: 0`, and spread across both workers.
@@ -599,3 +600,87 @@ Problems met during the build and how they were solved:
 | Gateway :30081 did not answer on the master | `externalTrafficPolicy: Local` only answers on nodes running Envoy | Changed it to `Cluster` |
 | `helmfile diff` missed a manual `kubectl scale` | helm-diff compared with the stored release, not the cluster | `HELM_DIFF_THREE_WAY_MERGE=true` in `deploy-k8s.sh` |
 | Re-running the add-ons always showed changes | Server-filled defaults (Calico IP pools, Secret `stringData`) | Declared the defaults explicitly, and used base64 `data` |
+
+---
+
+## 13. Submission checklist
+
+Status legend: ✅ done and verified, 🟡 done with a gap (explained), ➖ not done (reason given).
+
+### Tasks and evidence
+
+| Task | Status | Evidence (how it was verified) |
+|---|---|---|
+| 1. Terraform: 4 VMs from template 9000 | ✅ | `terraform validate` passes; `terraform plan` reports **No changes**. `ansible all -m ping` works; hostnames, Ubuntu 24.04 and 4 CPU / 4 GiB / 30 GB match |
+| 2. Docker Compose: 5 services behind NGINX | ✅ | All 5 services `healthy` ([docker-ps.png](monitoring/docker-ps.png), [docker-health.png](monitoring/docker-health.png)). Only port 80 is published. End-to-end API test passed (below) |
+| 2. Images on Docker Hub | ✅ | `projecthub-api:1.0.0` and `projecthub-frontend:1.0.0`; `release.sh` reports both already exist (immutable) |
+| 3. Kubernetes with Ansible | ✅ | 3 nodes `Ready`, v1.35.10, containerd 2.4.2, Calico ([k8s-nodes.png](monitoring/k8s-nodes.png), [k8s-pods.png](monitoring/k8s-pods.png)). Every playbook passes `--syntax-check`; a second run reports `changed=0` |
+| 4. App on Kubernetes (namespace `qt-spring-app`) | ✅ | api 3/3, frontend 2/2, edge 2/2, valkey 1/1, mongodb 1/1; PVC `Bound`; `deploy-k8s.sh --diff` reports no drift |
+| 4. NodePort access | ✅ | `/api/health` OK on :30080 from several node IPs ([k8s-health.png](monitoring/k8s-health.png)) |
+| 4. Resilience A: 3 replicas, pod deleted | ✅ | 101/101 requests HTTP 200 ([k8s-resilience-demo.txt](monitoring/k8s-resilience-demo.txt)) |
+| 4. Resilience B: Redis/Valkey down | ✅ | `"cache":"down"`, login OK, 20/20 requests HTTP 200, then restored |
+| 4. Persistence | ✅ | Data kept after the MongoDB pod was deleted (local PV, `Retain`) |
+| Bonus: Helm | ✅ | 6 charts + library chart on Docker Hub (OCI), deployed with Helmfile |
+| Bonus: Gateway API | ✅ | Gateway `PROGRAMMED True`; `/api/health` OK on :30081 |
+| 5. Monitoring screenshots | 🟡 | 36 screenshots in [monitoring/](monitoring/). Gaps listed under "Remaining issues" |
+| 6. Repository and README | ✅ | `iac/ ansible/ docker/ k8s/ app/ monitoring/ scripts/`, READMEs in `iac/`, `ansible/`, `k8s/` and `scripts/`, 4 Mermaid diagrams, runbook |
+
+### Application functions (tested on **both** deployments, http://192.168.160.90 and http://192.168.160.95:30080)
+
+| Check | Result |
+|---|---|
+| Login: admin, manager, member | ✅ token returned for all three |
+| Register a new user | ✅ |
+| Request without a token (`GET /api/projects`) | ✅ 401 |
+| Member asks for the user list (`GET /api/users`) | ✅ 403 (admin only) |
+| Manager creates a project and reads it | ✅ project ID returned, then 200 |
+| **Data isolation:** a member opens a project they are not on | ✅ 404, and it is not in their project list |
+| Test data cleaned up afterwards | ✅ project and user deleted (204) |
+
+### Required files
+
+| Area | Files |
+|---|---|
+| Terraform | `iac/{versions,provider,variables,main,outputs,inventory}.tf`, `iac/modules/proxmox-vm/`, `iac/terraform.tfvars.example`, `iac/README.md` |
+| Ansible | `ansible/ansible.cfg`, `inventory/hosts.ini`, `inventory/group_vars/`, `playbooks/*.yml`, `roles/*`, `ansible/README.md` |
+| Docker | `docker/Dockerfile.backend`, `docker/Dockerfile.frontend`, `*.dockerignore`, `docker-compose.yml`, `nginx.conf`, `.env.example` |
+| Kubernetes | `k8s/namespace.yaml`, `k8s/secrets.example.yaml`, `k8s/charts/*`, `k8s/helmfile.yaml.gotmpl`, `k8s/values/`, `k8s/README.md` |
+| Monitoring | `monitoring/*.png`, `monitoring/k8s-resilience-demo.txt` |
+
+### Access summary
+
+- **Application URLs:**
+  - Compose: http://192.168.160.90
+  - Kubernetes NodePort: http://192.168.160.95:30080
+  - Gateway API: http://192.168.160.95:30081
+- **VMs:** 192.168.160.90 (docker host), .95 (master), .93 (worker-1), .92 (worker-2). User `devops`.
+- **SSH credentials:** handed over **separately**, not in Git: the private key and password are in the submission package.
+- **Images:**
+  - `ishimwejeanluc/projecthub-api:1.0.0`, `ishimwejeanluc/projecthub-frontend:1.0.0`;
+  - official images: `mongo:7.0.48`, `valkey/valkey:8.1.12-alpine`, `nginx:1.30.7-alpine` (Compose), `nginxinc/nginx-unprivileged:1.30.6-alpine` (K8s edge).
+
+### Security review
+
+| Check | Status |
+|---|---|
+| No Proxmox token, Docker Hub token, VM password or app secret in Git | ✅ scanned every committed file for the real values |
+| `.env`, `*.tfvars`, `*.tfstate`, `kubeconfig`, SSH keys git-ignored | ✅ |
+| Kubernetes Secret not committed with real values | ✅ only `k8s/secrets.example.yaml` with placeholders |
+| MongoDB and Valkey not exposed | ✅ no host ports on Compose; ClusterIP plus NetworkPolicy on Kubernetes |
+| Passwords hidden in screenshots | ✅ Valkey uses `REDISCLI_AUTH`, so no `-a <password>` on the command line |
+
+### Remaining issues
+
+- **Screenshots still to add:**
+  - `vm2-free.png` (master memory);
+  - network interfaces and routes (`ip addr`, `ip route`) per VM;
+  - `kubectl get deployments` and `kubectl get events -n qt-spring-app`.
+- **`docker-redis.png` shows 0 cache hits and 0 misses** (taken right after a restart, before the app was used). Cache use is proven by the resilience demo, but a retake after using the app would show the counters.
+- **Production next steps, not done in this lab:**
+  - egress NetworkPolicies;
+  - `helm unittest` tests;
+  - sops or External Secrets;
+  - scheduled drift detection;
+  - TLS.
+
+  See [k8s/README.md](k8s/README.md#production-readiness-checklist-what-we-did-and-why).
