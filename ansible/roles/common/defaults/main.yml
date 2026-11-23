@@ -1,0 +1,16 @@
+---
+# Baseline packages for every VM (sysstat = iostat/vmstat for monitoring)
+common_packages:
+  - ca-certificates
+  - curl
+  - gnupg
+  - jq
+  - htop
+  - sysstat
+  - net-tools
+  - python3-pip
+
+# The Ubuntu installer only allocates half of the disk to the root LV: grow it to 100%.
+common_extend_root_lv: true
+common_root_vg: ubuntu-vg
+common_root_lv: ubuntu-lv

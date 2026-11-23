@@ -1,0 +1,3 @@
+---
+dependencies:
+  - role: docker_repo   # containerd.io comes from Docker's apt repository

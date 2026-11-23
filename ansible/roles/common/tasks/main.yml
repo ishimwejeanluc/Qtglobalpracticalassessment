@@ -1,0 +1,22 @@
+---
+- name: Install baseline packages
+  ansible.builtin.apt:
+    name: "{{ common_packages }}"
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Grow the root logical volume to use the whole disk
+  when: common_extend_root_lv
+  block:
+    - name: Read free extents in the root volume group
+      ansible.builtin.command: >-
+        vgs --noheadings -o vg_free_count {{ common_root_vg }}
+      register: common_vg_free
+      changed_when: false
+
+    - name: Extend root LV and filesystem into the free space
+      ansible.builtin.command: >-
+        lvextend --resizefs -l +100%FREE /dev/{{ common_root_vg }}/{{ common_root_lv }}
+      when: common_vg_free.stdout | trim | int > 0
+      changed_when: true

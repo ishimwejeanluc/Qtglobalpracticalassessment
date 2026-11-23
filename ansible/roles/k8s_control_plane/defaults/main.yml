@@ -1,0 +1,5 @@
+---
+k8s_cluster_name: qt-cluster
+k8s_kubeadm_config: /etc/kubernetes/kubeadm-config.yaml
+k8s_admin_kubeconfig: /etc/kubernetes/admin.conf
+k8s_cri_socket: unix:///run/containerd/containerd.sock

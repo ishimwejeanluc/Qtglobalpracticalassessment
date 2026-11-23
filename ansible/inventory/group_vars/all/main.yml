@@ -1,0 +1,13 @@
+---
+# Single source of truth: docker/.env (git-ignored), read on the control node.
+# Role k8s_app_prereqs builds the Kubernetes Secret from the same values Docker Compose uses.
+docker_env_file: "{{ inventory_dir }}/../../docker/.env"
+
+dockerhub_user: "{{ lookup('ansible.builtin.ini', 'DOCKERHUB_USER', type='properties', file=docker_env_file, case_sensitive=true) }}"
+app_image_tag: "{{ lookup('ansible.builtin.ini', 'IMAGE_TAG', type='properties', file=docker_env_file, case_sensitive=true) }}"
+
+# Application secrets -> Kubernetes Secret "projecthub-secrets"
+app_mongo_user: "{{ lookup('ansible.builtin.ini', 'MONGO_ROOT_USER', type='properties', file=docker_env_file, case_sensitive=true) }}"
+app_mongo_password: "{{ lookup('ansible.builtin.ini', 'MONGO_ROOT_PASSWORD', type='properties', file=docker_env_file, case_sensitive=true) }}"
+app_valkey_password: "{{ lookup('ansible.builtin.ini', 'VALKEY_PASSWORD', type='properties', file=docker_env_file, case_sensitive=true) }}"
+app_jwt_secret: "{{ lookup('ansible.builtin.ini', 'JWT_SECRET', type='properties', file=docker_env_file, case_sensitive=true) }}"

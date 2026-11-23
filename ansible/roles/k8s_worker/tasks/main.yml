@@ -1,0 +1,21 @@
+---
+- name: Check whether this node already joined the cluster
+  ansible.builtin.stat:
+    path: /etc/kubernetes/kubelet.conf
+  register: k8s_kubelet_conf
+
+- name: Join the cluster
+  when: not k8s_kubelet_conf.stat.exists
+  block:
+    # A fresh, short-lived token is created on demand: nothing is hard-coded or stored.
+    - name: Create a join command on the control plane
+      ansible.builtin.command: kubeadm token create --ttl 30m --print-join-command
+      delegate_to: "{{ k8s_control_plane_host }}"
+      register: k8s_join_command
+      changed_when: true
+      no_log: true
+
+    - name: Run kubeadm join
+      ansible.builtin.command: "{{ k8s_join_command.stdout }}"
+      changed_when: true
+      no_log: true

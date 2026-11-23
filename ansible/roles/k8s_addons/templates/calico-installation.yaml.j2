@@ -1,0 +1,29 @@
+# {{ ansible_managed }}
+# Calico via the Tigera operator. The pool CIDR matches kubeadm's podSubnet and avoids the LAN.
+apiVersion: operator.tigera.io/v1
+kind: Installation
+metadata:
+  name: default
+spec:
+  calicoNetwork:
+    # ipPools is an atomic list: every field the operator would default is declared explicitly,
+    # otherwise each re-run sees a diff and re-applies (breaking idempotency).
+    ipPools:
+      - name: default-ipv4-ippool
+        cidr: {{ k8s_pod_cidr }}
+        blockSize: 26
+        encapsulation: VXLANCrossSubnet
+        natOutgoing: Enabled
+        nodeSelector: all()
+        allowedUses:
+          - Workload
+          - Tunnel
+        assignmentMode: Automatic
+        disableBGPExport: false
+        disableNewAllocations: false
+---
+apiVersion: operator.tigera.io/v1
+kind: APIServer
+metadata:
+  name: default
+spec: {}

@@ -1,0 +1,55 @@
+---
+# Everything the Helm releases need BEFORE "helmfile apply" (which is run by hand, see k8s/README.md):
+#   1. MongoDB's data directory on the storage worker (needs SSH + sudo: not a Kubernetes job)
+#   2. the namespace (PSA "restricted") and its default-deny NetworkPolicy
+#   3. the application Secret, built from docker/.env (secrets never go into Helm values)
+
+- name: Create the MongoDB data directory on the storage node
+  ansible.builtin.file:
+    path: "{{ k8s_app_mongo_path }}"
+    state: directory
+    owner: "{{ k8s_app_mongo_uid }}"
+    group: "{{ k8s_app_mongo_uid }}"
+    mode: "2770"      # what the pod's fsGroup sets (setgid + group rw): avoids a tug-of-war with kubelet
+  delegate_to: "{{ k8s_app_storage_node }}"
+  become: true
+
+- name: Prepare the namespace from the control node
+  delegate_to: localhost
+  run_once: true
+  environment:
+    KUBECONFIG: "{{ k8s_local_kubeconfig }}"
+  block:
+    - name: Apply the namespace (PSA "restricted") and its default-deny NetworkPolicy
+      ansible.builtin.command: kubectl apply -f {{ k8s_app_namespace_manifest }}
+      register: k8s_app_ns
+      changed_when: k8s_app_ns.stdout_lines | reject('search', 'unchanged') | list | length > 0
+
+    # Sent on stdin: secret values never appear on a command line or in Helm values/history.
+    # "data" (base64), not "stringData": stringData is converted server-side and would
+    # show as changed on every apply.
+    - name: Create or update the application Secret from docker/.env
+      ansible.builtin.command:
+        cmd: kubectl apply -f -
+        stdin: "{{ k8s_app_secret | to_json }}"
+      vars:
+        k8s_app_secret:
+          apiVersion: v1
+          kind: Secret
+          type: Opaque
+          metadata:
+            name: "{{ k8s_app_secret_name }}"
+            namespace: "{{ k8s_app_namespace }}"
+            labels: { app.kubernetes.io/part-of: projecthub }
+          data:
+            MONGO_ROOT_USER: "{{ app_mongo_user | b64encode }}"
+            MONGO_ROOT_PASSWORD: "{{ app_mongo_password | b64encode }}"
+            VALKEY_PASSWORD: "{{ app_valkey_password | b64encode }}"
+            JWT_SECRET: "{{ app_jwt_secret | b64encode }}"
+      register: k8s_app_secret_result
+      changed_when: "'unchanged' not in k8s_app_secret_result.stdout"
+      no_log: true
+
+    - name: Next step
+      ansible.builtin.debug:
+        msg: "Prerequisites ready. Deploy by hand: cd k8s && helmfile apply   (see k8s/README.md)"

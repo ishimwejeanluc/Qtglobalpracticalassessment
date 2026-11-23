@@ -1,0 +1,37 @@
+---
+- name: Install containerd
+  ansible.builtin.apt:
+    name: "{{ containerd_package }}"
+    state: present
+
+# The packaged config disables the CRI plugin. Start from the full default config and switch
+# runc to the systemd cgroup driver (required to match the kubelet on systemd hosts).
+- name: Render containerd's default configuration
+  ansible.builtin.command: containerd config default
+  register: containerd_default_config
+  changed_when: false
+
+- name: Write containerd config (CRI enabled, SystemdCgroup = true)
+  ansible.builtin.copy:
+    content: "{{ containerd_default_config.stdout | regex_replace('SystemdCgroup = false', 'SystemdCgroup = true') }}\n"
+    dest: "{{ containerd_config }}"
+    mode: "0644"
+  notify: Restart containerd
+
+- name: Point crictl at containerd
+  ansible.builtin.copy:
+    dest: /etc/crictl.yaml
+    mode: "0644"
+    content: |
+      runtime-endpoint: {{ containerd_socket }}
+      image-endpoint: {{ containerd_socket }}
+      timeout: 10
+
+- name: Start containerd and enable it at boot
+  ansible.builtin.service:
+    name: containerd
+    state: started
+    enabled: true
+
+- name: Apply a pending containerd restart before Kubernetes uses it
+  ansible.builtin.meta: flush_handlers

@@ -1,0 +1,17 @@
+---
+k8s_kernel_modules:
+  - overlay
+  - br_netfilter
+
+k8s_sysctl:
+  net.bridge.bridge-nf-call-iptables: 1
+  net.bridge.bridge-nf-call-ip6tables: 1
+  net.ipv4.ip_forward: 1
+
+k8s_packages:
+  - kubelet
+  - kubeadm
+  - kubectl
+
+k8s_apt_url: "https://pkgs.k8s.io/core:/stable:/v{{ k8s_version }}/deb/"
+k8s_keyring: /etc/apt/keyrings/kubernetes-apt-keyring.asc

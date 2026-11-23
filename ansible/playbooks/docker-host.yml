@@ -1,0 +1,10 @@
+---
+# Task 2 (host preparation): base packages, full-size root disk, Docker Engine + Compose plugin.
+#   ansible-playbook playbooks/docker-host.yml
+# The application itself is then deployed by hand with Docker Compose (steps in the main README).
+- name: Docker host - base system and Docker Engine
+  hosts: docker
+  become: true
+  roles:
+    - role: common
+    - role: docker_engine

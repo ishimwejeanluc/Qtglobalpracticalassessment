@@ -1,0 +1,4 @@
+---
+containerd_package: containerd.io
+containerd_config: /etc/containerd/config.toml
+containerd_socket: unix:///run/containerd/containerd.sock

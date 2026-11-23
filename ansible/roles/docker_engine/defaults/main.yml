@@ -1,0 +1,25 @@
+---
+# Docker Engine from Docker's official apt repository (added by the docker_repo role)
+docker_packages:
+  - docker-ce
+  - docker-ce-cli
+  - containerd.io
+  - docker-buildx-plugin
+  - docker-compose-plugin
+
+# Distro packages that conflict with docker-ce
+docker_conflicting_packages:
+  - docker.io
+  - docker-doc
+  - docker-compose
+  - podman-docker
+  - containerd
+  - runc
+
+# Users allowed to run docker without sudo
+docker_users:
+  - "{{ ansible_user }}"
+
+# Container log rotation (avoids filling the disk)
+docker_log_max_size: 10m
+docker_log_max_file: 3

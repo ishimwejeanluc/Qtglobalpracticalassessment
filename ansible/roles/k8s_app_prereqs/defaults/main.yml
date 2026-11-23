@@ -1,0 +1,12 @@
+---
+k8s_app_namespace: qt-spring-app
+k8s_app_namespace_manifest: "{{ playbook_dir }}/../../k8s/namespace.yaml"
+
+# Secret referenced by every chart (existingSecret) - built from docker/.env, never stored in Helm
+k8s_app_secret_name: projecthub-secrets
+
+# MongoDB local PersistentVolume: directory on one worker, owned by the image's mongodb user.
+# Must match persistence.nodeName / persistence.path of the MongoDB release (k8s/values/mongodb.yaml.gotmpl).
+k8s_app_storage_node: "{{ groups['workers'][0] }}"
+k8s_app_mongo_path: /var/lib/projecthub/mongodb
+k8s_app_mongo_uid: 999

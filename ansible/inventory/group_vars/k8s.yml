@@ -1,0 +1,25 @@
+---
+# Kubernetes cluster settings (Task 3) - shared by every k8s role.
+
+k8s_version: "1.35"                  # minor version: apt repo + package pin
+k8s_pod_cidr: 10.244.0.0/16          # must NOT overlap the LAN (192.168.160.0/24)
+k8s_service_cidr: 10.96.0.0/12
+k8s_api_port: 6443
+
+# First host of the control_plane group initialises the cluster
+k8s_control_plane_host: "{{ groups['control_plane'][0] }}"
+k8s_control_plane_ip: "{{ hostvars[k8s_control_plane_host].ansible_host }}"
+
+# CNI: Calico (operator install) - supports NetworkPolicy, unlike Flannel
+calico_version: v3.33.1
+
+# Addons
+metrics_server_version: v0.9.1
+
+# Admin kubeconfig copied to the control node (git-ignored)
+k8s_local_kubeconfig: "{{ inventory_dir }}/../kubeconfig"
+
+# Gateway API (bonus): CRDs from kubernetes-sigs + Envoy Gateway as the controller.
+# Keep these two in step: Envoy Gateway v1.10.0 is built against Gateway API v1.6.1.
+gateway_api_version: v1.6.1
+envoy_gateway_version: v1.10.0

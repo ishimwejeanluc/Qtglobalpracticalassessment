@@ -1,0 +1,7 @@
+---
+# ansible-galaxy collection install -r requirements.yml
+collections:
+  - name: community.general    # modprobe (k8s_node)
+    version: ">=9.0.0"
+  - name: ansible.posix        # sysctl (k8s_node)
+    version: ">=1.5.0"

@@ -1,0 +1,7 @@
+---
+# Everything: Docker host (Task 2) + Kubernetes cluster (Task 3)
+- name: Docker host
+  ansible.builtin.import_playbook: docker-host.yml
+
+- name: Kubernetes cluster
+  ansible.builtin.import_playbook: k8s-cluster.yml

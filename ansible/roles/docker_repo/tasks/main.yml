@@ -1,0 +1,23 @@
+---
+# Shared by docker_engine (Docker host) and containerd (Kubernetes nodes).
+- name: Install Docker's apt signing key
+  ansible.builtin.get_url:
+    url: "{{ docker_apt_url }}/gpg"
+    dest: "{{ docker_keyring }}"
+    mode: "0644"
+
+- name: Add Docker's apt repository
+  ansible.builtin.deb822_repository:
+    name: docker
+    types: deb
+    uris: "{{ docker_apt_url }}"
+    suites: "{{ ansible_facts.distribution_release }}"
+    components: stable
+    architectures: "{{ 'arm64' if ansible_facts.architecture == 'aarch64' else 'amd64' }}"
+    signed_by: "{{ docker_keyring }}"
+  register: docker_repo_result
+
+- name: Refresh the apt cache after adding the repository
+  ansible.builtin.apt:
+    update_cache: true
+  when: docker_repo_result is changed

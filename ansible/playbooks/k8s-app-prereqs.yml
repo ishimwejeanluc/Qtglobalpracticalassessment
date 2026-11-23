@@ -1,0 +1,9 @@
+---
+# Task 4 prerequisites: storage directory, namespace (PSA + default-deny) and application Secret.
+#   ansible-playbook playbooks/k8s-app-prereqs.yml
+# The application itself is deployed by hand afterwards:  ./scripts/deploy-k8s.sh
+- name: Prepare the cluster for the ProjectHub Helm releases
+  hosts: control_plane
+  gather_facts: false
+  roles:
+    - role: k8s_app_prereqs

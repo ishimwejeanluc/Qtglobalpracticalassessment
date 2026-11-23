@@ -1,0 +1,15 @@
+---
+# Idempotent "kubectl apply": diff first, apply only on drift.
+#   rc 0 = in sync | rc 1 = differs | rc >1 = error, except "NotFound" (e.g. first install, when
+#   the manifest's own namespace does not exist yet) which also means "needs applying".
+# Input: manifest (path on the control plane)
+- name: Diff {{ manifest | basename }} against the cluster
+  ansible.builtin.command: kubectl diff --server-side --force-conflicts -f {{ manifest }}
+  register: k8s_manifest_diff
+  failed_when: k8s_manifest_diff.rc > 1 and 'NotFound' not in k8s_manifest_diff.stderr
+  changed_when: false
+
+- name: Apply {{ manifest | basename }}
+  ansible.builtin.command: kubectl apply --server-side --force-conflicts -f {{ manifest }}
+  when: k8s_manifest_diff.rc != 0
+  changed_when: true

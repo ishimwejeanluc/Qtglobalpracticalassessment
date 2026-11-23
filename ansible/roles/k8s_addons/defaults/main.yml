@@ -1,0 +1,15 @@
+---
+k8s_addons_dir: /etc/kubernetes/addons
+
+calico_manifest_base: "https://raw.githubusercontent.com/projectcalico/calico/{{ calico_version }}/manifests"
+# Order matters: CRDs first, then the operator that uses them
+calico_operator_manifests:
+  - operator-crds.yaml
+  - tigera-operator.yaml
+metrics_server_url: "https://github.com/kubernetes-sigs/metrics-server/releases/download/{{ metrics_server_version }}/components.yaml"
+
+gateway_api_url: "https://github.com/kubernetes-sigs/gateway-api/releases/download/{{ gateway_api_version }}/standard-install.yaml"
+envoy_gateway_url: "https://github.com/envoyproxy/gateway/releases/download/{{ envoy_gateway_version }}"
+envoy_gateway_namespace: envoy-gateway-system
+
+k8s_ready_timeout: 600s

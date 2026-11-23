@@ -1,0 +1,32 @@
+---
+# Task 3: Kubernetes cluster with kubeadm + containerd + Calico.
+#   ansible-playbook playbooks/k8s-cluster.yml
+# Safe to re-run: every step checks the current state first (no reset, no re-init, no re-join).
+
+- name: Prepare all Kubernetes nodes
+  hosts: k8s
+  become: true
+  roles:
+    - role: common
+    - role: containerd
+    - role: k8s_node
+
+- name: Initialise the control plane
+  hosts: control_plane
+  become: true
+  roles:
+    - role: k8s_control_plane
+
+- name: Join the worker nodes
+  hosts: workers
+  become: true
+  roles:
+    - role: k8s_worker
+
+- name: Install cluster addons (Calico CNI, metrics-server) and verify
+  hosts: control_plane
+  become: true
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  roles:
+    - role: k8s_addons

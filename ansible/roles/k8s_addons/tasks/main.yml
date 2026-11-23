@@ -1,0 +1,153 @@
+---
+# Runs on the control plane with KUBECONFIG=/etc/kubernetes/admin.conf (set by the playbook).
+
+- name: Create the addons directory
+  ansible.builtin.file:
+    path: "{{ k8s_addons_dir }}"
+    state: directory
+    mode: "0700"
+
+# ---------- CNI: Calico ----------
+- name: Download the Calico operator manifests ({{ calico_version }})
+  ansible.builtin.get_url:
+    url: "{{ calico_manifest_base }}/{{ item }}"
+    dest: "{{ k8s_addons_dir }}/calico-{{ calico_version }}-{{ item }}"
+    mode: "0600"
+  loop: "{{ calico_operator_manifests }}"
+
+- name: Install the Calico CRDs and the Tigera operator
+  ansible.builtin.include_tasks: apply_manifest.yml
+  vars:
+    manifest: "{{ k8s_addons_dir }}/calico-{{ calico_version }}-{{ item }}"
+  loop: "{{ calico_operator_manifests }}"
+
+- name: Wait for the operator CRDs to be registered
+  ansible.builtin.command: >-
+    kubectl wait --for=condition=Established --timeout=120s
+    crd/installations.operator.tigera.io crd/apiservers.operator.tigera.io
+  changed_when: false
+
+- name: Write the Calico installation (pod CIDR {{ k8s_pod_cidr }})
+  ansible.builtin.template:
+    src: calico-installation.yaml.j2
+    dest: "{{ k8s_addons_dir }}/calico-installation.yaml"
+    mode: "0600"
+
+- name: Install Calico
+  ansible.builtin.include_tasks: apply_manifest.yml
+  vars:
+    manifest: "{{ k8s_addons_dir }}/calico-installation.yaml"
+
+# ---------- metrics-server (kubectl top) ----------
+- name: Download metrics-server ({{ metrics_server_version }})
+  ansible.builtin.get_url:
+    url: "{{ metrics_server_url }}"
+    dest: "{{ k8s_addons_dir }}/metrics-server-{{ metrics_server_version }}.yaml"
+    mode: "0600"
+
+# kubeadm kubelets serve self-signed certificates
+- name: Let metrics-server accept the kubelets' self-signed certificates
+  ansible.builtin.lineinfile:
+    path: "{{ k8s_addons_dir }}/metrics-server-{{ metrics_server_version }}.yaml"
+    insertafter: '^\s+- --metric-resolution='
+    line: "        - --kubelet-insecure-tls"
+
+- name: Install metrics-server
+  ansible.builtin.include_tasks: apply_manifest.yml
+  vars:
+    manifest: "{{ k8s_addons_dir }}/metrics-server-{{ metrics_server_version }}.yaml"
+
+# ---------- Gateway API: CRDs + Envoy Gateway controller ----------
+- name: Download the Gateway API CRDs ({{ gateway_api_version }}, standard channel)
+  ansible.builtin.get_url:
+    url: "{{ gateway_api_url }}"
+    dest: "{{ k8s_addons_dir }}/gateway-api-{{ gateway_api_version }}-standard.yaml"
+    mode: "0600"
+
+- name: Install the Gateway API CRDs
+  ansible.builtin.include_tasks: apply_manifest.yml
+  vars:
+    manifest: "{{ k8s_addons_dir }}/gateway-api-{{ gateway_api_version }}-standard.yaml"
+
+- name: Download Envoy Gateway ({{ envoy_gateway_version }}) CRDs and controller
+  ansible.builtin.get_url:
+    url: "{{ envoy_gateway_url }}/{{ item }}"
+    dest: "{{ k8s_addons_dir }}/envoy-gateway-{{ envoy_gateway_version }}-{{ item }}"
+    mode: "0600"
+  loop:
+    - envoy-gateway-crds.yaml
+    - install.yaml
+
+- name: Install the Envoy Gateway CRDs (gateway.envoyproxy.io)
+  ansible.builtin.include_tasks: apply_manifest.yml
+  vars:
+    manifest: "{{ k8s_addons_dir }}/envoy-gateway-{{ envoy_gateway_version }}-envoy-gateway-crds.yaml"
+
+# install.yaml bundles the Gateway API CRDs + admission policy (installed above from the official
+# release) and a self-deleting certgen Job: split them out so every re-run is a no-op.
+- name: Split the Envoy Gateway manifest (controller / one-off certgen Job)
+  ansible.builtin.script:
+    cmd: >-
+      split_controller_manifest.py
+      {{ k8s_addons_dir }}/envoy-gateway-{{ envoy_gateway_version }}-install.yaml
+      {{ k8s_addons_dir }}/envoy-gateway-{{ envoy_gateway_version }}-controller.yaml
+      {{ k8s_addons_dir }}/envoy-gateway-{{ envoy_gateway_version }}-certgen-job.yaml
+    executable: python3
+    creates: "{{ k8s_addons_dir }}/envoy-gateway-{{ envoy_gateway_version }}-certgen-job.yaml"
+
+- name: Install the Envoy Gateway controller
+  ansible.builtin.include_tasks: apply_manifest.yml
+  vars:
+    manifest: "{{ k8s_addons_dir }}/envoy-gateway-{{ envoy_gateway_version }}-controller.yaml"
+
+- name: Check whether Envoy Gateway's TLS certificates exist
+  ansible.builtin.command: kubectl get secret envoy-gateway -n {{ envoy_gateway_namespace }}
+  register: envoy_gateway_certs
+  failed_when: false
+  changed_when: false
+
+- name: Generate Envoy Gateway's TLS certificates (certgen Job, first install only)
+  when: envoy_gateway_certs.rc != 0
+  block:
+    - name: Run the certgen Job
+      ansible.builtin.command: kubectl apply -f {{ k8s_addons_dir }}/envoy-gateway-{{ envoy_gateway_version }}-certgen-job.yaml
+      changed_when: true
+
+    - name: Wait for the certificates
+      ansible.builtin.command: kubectl get secret envoy-gateway -n {{ envoy_gateway_namespace }}
+      register: envoy_gateway_certs_created
+      until: envoy_gateway_certs_created.rc == 0
+      retries: 24
+      delay: 5
+      changed_when: false
+
+- name: Wait for the Envoy Gateway controller
+  ansible.builtin.command: >-
+    kubectl rollout status deployment/envoy-gateway
+    -n {{ envoy_gateway_namespace }} --timeout={{ k8s_ready_timeout }}
+  changed_when: false
+
+# ---------- Verification ----------
+- name: Wait until every node is Ready
+  ansible.builtin.command: kubectl wait --for=condition=Ready nodes --all --timeout={{ k8s_ready_timeout }}
+  changed_when: false
+
+# Retried: right after install the operator may not have created the pods yet ("no matching resources").
+- name: Wait until all system pods are Ready
+  ansible.builtin.command: >-
+    kubectl wait --for=condition=Ready pods --all -n {{ item }} --timeout=60s
+  loop: [tigera-operator, calico-system, kube-system, envoy-gateway-system]
+  register: k8s_pods_ready
+  until: k8s_pods_ready.rc == 0
+  retries: 20
+  delay: 15
+  changed_when: false
+
+- name: Read cluster nodes
+  ansible.builtin.command: kubectl get nodes -o wide
+  register: k8s_nodes
+  changed_when: false
+
+- name: Show cluster nodes
+  ansible.builtin.debug:
+    msg: "{{ k8s_nodes.stdout_lines }}"

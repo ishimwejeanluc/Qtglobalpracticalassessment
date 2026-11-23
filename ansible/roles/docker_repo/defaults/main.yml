@@ -1,0 +1,4 @@
+---
+# Docker's official apt repository (provides docker-ce and containerd.io)
+docker_apt_url: https://download.docker.com/linux/ubuntu
+docker_keyring: /etc/apt/keyrings/docker.asc

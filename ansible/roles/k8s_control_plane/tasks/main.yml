@@ -1,0 +1,51 @@
+---
+- name: Check whether the cluster is already initialised
+  ansible.builtin.stat:
+    path: "{{ k8s_admin_kubeconfig }}"
+  register: k8s_admin_conf
+
+- name: Read the installed kubeadm version
+  ansible.builtin.command: kubeadm version -o short
+  register: k8s_kubeadm_version
+  changed_when: false
+
+- name: Write the kubeadm configuration
+  ansible.builtin.template:
+    src: kubeadm-config.yaml.j2
+    dest: "{{ k8s_kubeadm_config }}"
+    mode: "0600"
+
+- name: Initialise the control plane (kubeadm init)
+  ansible.builtin.command: kubeadm init --config {{ k8s_kubeadm_config }}
+  when: not k8s_admin_conf.stat.exists
+  changed_when: true
+
+- name: Create ~/.kube for the admin user
+  ansible.builtin.file:
+    path: "/home/{{ ansible_user }}/.kube"
+    state: directory
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: "0700"
+
+- name: Give the admin user kubectl access
+  ansible.builtin.copy:
+    src: "{{ k8s_admin_kubeconfig }}"
+    dest: "/home/{{ ansible_user }}/.kube/config"
+    remote_src: true
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: "0600"
+
+- name: Copy the admin kubeconfig to the control node
+  ansible.builtin.fetch:
+    src: "{{ k8s_admin_kubeconfig }}"
+    dest: "{{ k8s_local_kubeconfig }}"
+    flat: true
+
+- name: Restrict the local kubeconfig to its owner
+  ansible.builtin.file:
+    path: "{{ k8s_local_kubeconfig }}"
+    mode: "0600"
+  delegate_to: localhost
+  become: false
