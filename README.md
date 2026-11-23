@@ -1,5 +1,9 @@
 # ProjectHub: DevOps Practical Exam (Challenge A)
 
+| Candidate | Proxmox pool | Proxmox user |
+|---|---|---|
+| **Candidate 1** | `exam-c1` | `candidate1@pve` |
+
 This repository delivers **ProjectHub** (Go API, React frontend, MongoDB, Valkey/Redis cache) end to end:
 
 1. **Terraform** creates 4 VMs on Proxmox.
