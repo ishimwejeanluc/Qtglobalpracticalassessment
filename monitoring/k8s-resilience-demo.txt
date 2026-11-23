@@ -1,0 +1,66 @@
+Target: http://192.168.160.95:30080  (2026-11-23 11:13:07 UTC)
+
+### A1. Scale the API to 3 replicas
+$ kubectl scale deployment/projecthub-api -n qt-spring-app --replicas=3
+deployment.apps/projecthub-api scaled
+$ kubectl rollout status deployment/projecthub-api -n qt-spring-app --timeout=120s
+deployment "projecthub-api" successfully rolled out
+$ kubectl get pods -n qt-spring-app -l app.kubernetes.io/name=api -o wide
+NAME                              READY   STATUS    RESTARTS   AGE   IP              NODE              NOMINATED NODE   READINESS GATES
+projecthub-api-5798cd5cf9-c5fdp   1/1     Running   0          89s   10.244.119.35   c3-k8s-worker-2   <none>           <none>
+projecthub-api-5798cd5cf9-nc6rz   1/1     Running   0          89s   10.244.46.155   c3-k8s-worker-1   <none>           <none>
+projecthub-api-5798cd5cf9-v6fc2   1/1     Running   0          89s   10.244.119.34   c3-k8s-worker-2   <none>           <none>
+
+### A2. Delete one API pod while requests are flowing
+$ kubectl delete pod projecthub-api-5798cd5cf9-c5fdp -n qt-spring-app --wait=false
+pod "projecthub-api-5798cd5cf9-c5fdp" deleted
+$ kubectl get pods -n qt-spring-app -l app.kubernetes.io/name=api -o wide
+NAME                              READY   STATUS    RESTARTS   AGE   IP              NODE              NOMINATED NODE   READINESS GATES
+projecthub-api-5798cd5cf9-c8nkq   0/1     Running   0          2s    10.244.119.39   c3-k8s-worker-2   <none>           <none>
+projecthub-api-5798cd5cf9-nc6rz   1/1     Running   0          94s   10.244.46.155   c3-k8s-worker-1   <none>           <none>
+projecthub-api-5798cd5cf9-v6fc2   1/1     Running   0          94s   10.244.119.34   c3-k8s-worker-2   <none>           <none>
+$ kubectl rollout status deployment/projecthub-api -n qt-spring-app --timeout=120s
+deployment "projecthub-api" successfully rolled out
+$ kubectl get pods -n qt-spring-app -l app.kubernetes.io/name=api -o wide
+NAME                              READY   STATUS    RESTARTS   AGE    IP              NODE              NOMINATED NODE   READINESS GATES
+projecthub-api-5798cd5cf9-c8nkq   1/1     Running   0          23s    10.244.119.39   c3-k8s-worker-2   <none>           <none>
+projecthub-api-5798cd5cf9-nc6rz   1/1     Running   0          115s   10.244.46.155   c3-k8s-worker-1   <none>           <none>
+projecthub-api-5798cd5cf9-v6fc2   1/1     Running   0          115s   10.244.119.34   c3-k8s-worker-2   <none>           <none>
+
+### A3. Result: requests during the pod deletion
+Requests: 101 | HTTP 200: 101 | failed: 0
+  status  101 200
+
+### B1. Stop the cache (scale Valkey to 0)
+$ curl -s http://192.168.160.95:30080/api/health
+{"status":"ok","database":"up","cache":"up"}
+$ kubectl scale deployment/projecthub-valkey -n qt-spring-app --replicas=0
+deployment.apps/projecthub-valkey scaled
+$ kubectl wait pods -n qt-spring-app -l app.kubernetes.io/name=valkey --for=delete --timeout=90s
+pod/projecthub-valkey-599db9c88b-fdg6d condition met
+$ kubectl get pods -n qt-spring-app
+NAME                                   READY   STATUS    RESTARTS   AGE
+projecthub-api-5798cd5cf9-c8nkq        1/1     Running   0          24s
+projecthub-api-5798cd5cf9-nc6rz        1/1     Running   0          116s
+projecthub-api-5798cd5cf9-v6fc2        1/1     Running   0          116s
+projecthub-edge-6f7f7f7757-lr7qq       1/1     Running   0          110s
+projecthub-edge-6f7f7f7757-tfnk5       1/1     Running   0          110s
+projecthub-frontend-6b5bc75bf4-d446q   1/1     Running   0          2m3s
+projecthub-frontend-6b5bc75bf4-x4hsx   1/1     Running   0          2m3s
+projecthub-mongodb-0                   1/1     Running   0          2m3s
+
+### B2. The application still works without the cache
+$ curl -s http://192.168.160.95:30080/api/health
+{"status":"ok","database":"up","cache":"down"}
+Fresh login without cache: OK
+Requests: 20 | HTTP 200: 20 | failed: 0
+  status   20 200
+
+### B3. Restore the cache
+$ kubectl scale deployment/projecthub-valkey -n qt-spring-app --replicas=1
+deployment.apps/projecthub-valkey scaled
+$ kubectl rollout status deployment/projecthub-valkey -n qt-spring-app --timeout=120s
+Waiting for deployment "projecthub-valkey" rollout to finish: 0 of 1 updated replicas are available...
+deployment "projecthub-valkey" successfully rolled out
+$ curl -s http://192.168.160.95:30080/api/health
+{"status":"ok","database":"up","cache":"up"}
