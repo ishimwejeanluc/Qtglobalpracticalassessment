@@ -1,0 +1,14 @@
+# cp terraform.tfvars.example terraform.tfvars   (terraform.tfvars is git-ignored)
+# Secret token: export TF_VAR_proxmox_api_token_secret='...'
+
+vm_username         = "devops"
+vm_password         = "CHANGE-ME"
+ssh_public_key_path = "~/.ssh/qt_exam_ed25519.pub"
+
+# DHCP: no "ip" set. Add  ip = "192.168.160.N"  to a VM for a static address instead.
+vms = {
+  "c3-docker-host"  = { vm_id = 4101, role = "docker-host" }
+  "c3-k8s-master"   = { vm_id = 4102, role = "k8s-master" }
+  "c3-k8s-worker-1" = { vm_id = 4103, role = "k8s-worker" }
+  "c3-k8s-worker-2" = { vm_id = 4104, role = "k8s-worker" }
+}
