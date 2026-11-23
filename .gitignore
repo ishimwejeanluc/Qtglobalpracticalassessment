@@ -26,3 +26,7 @@ prompt.md
 # Packaged Helm charts and vendored library
 k8s/dist/
 k8s/charts/*/charts/
+
+# Examiner credentials (private key, password) - never commit
+submission/
+submission.zip
