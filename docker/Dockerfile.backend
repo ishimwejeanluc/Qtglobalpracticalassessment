@@ -1,0 +1,25 @@
+# syntax=docker/dockerfile:1
+# Build context: app/backend
+
+# ---------- Stage 1: build a static Go binary ----------
+FROM golang:1.26.3-alpine3.22@sha256:be93003ee861b3b91b6ebcb22678524947e0cd786c2df3f32af520006b1e54f5 AS build
+WORKDIR /src
+# Dependencies first so this layer is cached when only source code changes
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/projecthub-api .
+
+# ---------- Stage 2: minimal runtime ----------
+FROM alpine:3.22.8@sha256:49340b346798875b5592e5d420241f2f9cfba5f47e62ebb1446a1b34734e898f
+RUN apk add --no-cache ca-certificates tzdata \
+ && addgroup -S app && adduser -S -G app -H app
+WORKDIR /app
+COPY --from=build /out/projecthub-api /app/projecthub-api
+USER app
+ENV PORT=8080 GIN_MODE=release
+EXPOSE 8080
+# busybox wget is available for the container health check
+HEALTHCHECK --interval=15s --timeout=3s --start-period=20s --retries=3 \
+  CMD wget -qO- http://127.0.0.1:8080/api/health >/dev/null || exit 1
+ENTRYPOINT ["/app/projecthub-api"]

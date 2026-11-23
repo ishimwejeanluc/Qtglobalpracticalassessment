@@ -1,0 +1,94 @@
+# ProjectHub on c3-docker-host
+#   LAN -> nginx:80 -> frontend:8080 (/)
+#                   -> backend:8080 (/api/) -> mongodb:27017 + valkey:6379 (cache)
+#
+# Only nginx publishes a host port. Images use exact version tags (app tags are immutable) and
+# every value comes from ./.env (see .env.example). Images are built and pushed by scripts/build-push-images.sh,
+# never by Compose, so the host runs exactly what was pushed to Docker Hub.
+
+name: projecthub
+
+services:
+  nginx:
+    image: ${NGINX_IMAGE:?set NGINX_IMAGE in .env}
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      frontend:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/nginx-health"]
+      interval: 15s
+      timeout: 3s
+      retries: 3
+    networks: [edge]
+
+  frontend:
+    image: ${DOCKERHUB_USER:?set DOCKERHUB_USER in .env}/projecthub-frontend:${IMAGE_TAG:?set IMAGE_TAG in .env}
+    restart: unless-stopped
+    networks: [edge]
+
+  backend:
+    image: ${DOCKERHUB_USER:?set DOCKERHUB_USER in .env}/projecthub-api:${IMAGE_TAG:?set IMAGE_TAG in .env}
+    restart: unless-stopped
+    environment:
+      PORT: "8080"
+      GIN_MODE: release
+      MONGO_URI: mongodb://${MONGO_ROOT_USER:?}:${MONGO_ROOT_PASSWORD:?}@mongodb:27017/?authSource=admin
+      MONGO_DB: ${MONGO_DB:-projecthub}
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET (>= 32 chars) in .env}
+      JWT_EXPIRES_IN: 24h
+      CORS_ORIGINS: "*"
+      CACHE_ENABLED: "true"
+      VALKEY_ADDR: valkey:6379
+      VALKEY_PASSWORD: ${VALKEY_PASSWORD:?}
+      SEED_ENABLED: ${SEED_ENABLED:-true}
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      valkey:
+        condition: service_started   # the cache is optional: never block the API on it
+    networks: [edge, data]
+
+  mongodb:
+    image: ${MONGO_IMAGE:?set MONGO_IMAGE in .env}
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USER:?}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:?}
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    networks: [data]                 # no "ports:" -> not reachable from the host/LAN
+
+  valkey:
+    image: ${VALKEY_IMAGE:?set VALKEY_IMAGE in .env}
+    restart: unless-stopped
+    environment:
+      VALKEY_PASSWORD: ${VALKEY_PASSWORD:?}
+      REDISCLI_AUTH: ${VALKEY_PASSWORD:?}   # valkey-cli authenticates without -a on the command line
+    command: ["sh", "-c", "exec valkey-server --requirepass \"$$VALKEY_PASSWORD\" --maxmemory 256mb --maxmemory-policy allkeys-lru --save '' --appendonly no"]
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks: [data]                 # no "ports:" -> not reachable from the host/LAN
+
+networks:
+  edge: {}
+  data:
+    internal: true                   # data tier: no route in or out of Docker
+
+volumes:
+  mongo-data: {}
